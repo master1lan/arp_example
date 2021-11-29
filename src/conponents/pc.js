@@ -1,8 +1,7 @@
 //主机设置
 import React, { useState } from 'react';
-import { Card, List } from 'antd';
+import { Card, List, Col, Row } from 'antd';
 import { FormStyle } from './dataFromat';
-
 //这里渲染单个主机
 export default class PC extends React.Component {
   constructor(props) {
@@ -16,14 +15,14 @@ export default class PC extends React.Component {
   render() {
     const state = this.state;
     return (
-      <>
-        <PcItem
-          ipAddress={this.props.ipAddress}
-          macAddress={this.props.macAddress}
-          msg={this.props.msg}
-          deleteMsg={this.props.deleteMsg}
-        />
-      </>
+      <PcItem
+        ipAddress={this.props.ipAddress}
+        macAddress={this.props.macAddress}
+        msg={this.props.msg}
+        deleteMsg={this.props.deleteMsg}
+        filterMap={this.props.filterMap}
+        sendData={this.props.sendData}
+      />
     );
   }
 }
@@ -39,14 +38,18 @@ const PcItem = (props) => {
       tab: '发送消息',
     },
     {
-      key: '收到的消息',
-      tab: '收到的消息',
+      key: '报文',
+      tab: '报文',
     },
     {
       key: '映射表',
       tab: '映射表',
     },
   ];
+  const objToArray = [];
+  for (let i in props.filterMap) {
+    objToArray.push(i);
+  }
   const contentList = {
     设备信息: (
       <div>
@@ -55,10 +58,26 @@ const PcItem = (props) => {
       </div>
     ),
     发送消息: (
-      <FormStyle ipAddress={props.ipAddress} macAddress={props.macAddress} />
+      <FormStyle
+        ipAddress={props.ipAddress}
+        macAddress={props.macAddress}
+        sendData={props.sendData}
+      />
     ),
-    收到的消息: <MsgItem items={props.msg} deleteMsg={props.deleteMsg} />,
-    映射表: <div></div>,
+    报文: <MsgItem items={props.msg} deleteMsg={props.deleteMsg} />,
+    映射表: (
+      <div>
+        <List
+          dataSource={objToArray}
+          renderItem={(item, index) => (
+            <List.Item key={index}>
+              <p>{props.filterMap[item]}</p>
+              <p>{item}</p>
+            </List.Item>
+          )}
+        ></List>
+      </div>
+    ),
   };
   const [activeTabKey, setActiveTabKey] = useState('设备信息');
   const onTabChange = (key) => {
@@ -66,7 +85,13 @@ const PcItem = (props) => {
   };
   return (
     <Card
-      title={'主机' + props.ipAddress.split('.')[3]}
+      hoverable={true}
+      title={
+        '网段' +
+        props.ipAddress.split('.')[2] +
+        ' 主机' +
+        props.ipAddress.split('.')[3]
+      }
       tabList={tabList}
       activeTabKey={activeTabKey}
       onTabChange={onTabChange}
