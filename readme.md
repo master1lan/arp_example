@@ -1,5 +1,7 @@
 # arp-example
 ## 目标
+### pages
+https://master1lan.github.io/arp_example/
 ### 同网段下不同主机之间的交流是这样的
 * 当主机arp表内没有对应ip主机的mac地址时，应该通过交换机进行广播，仅目标主机回应
 * 当主机arp表内存在目标ip主机的mac地址时，直接交流
