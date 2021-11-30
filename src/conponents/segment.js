@@ -117,6 +117,7 @@ const SwitchItem = (props) => {
   };
   return (
     <Card
+      style={{ backgroundColor: 'LightSteelBlue' }}
       hoverable={true}
       title={'交换机网段：' + props.switch.ipAddress.split('.')[2]}
       tabList={tabList}

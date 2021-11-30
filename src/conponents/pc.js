@@ -85,6 +85,7 @@ const PcItem = (props) => {
   };
   return (
     <Card
+      style={{ backgroundColor: 'SeaShell' }}
       hoverable={true}
       title={
         '网段' +
@@ -111,7 +112,7 @@ const MsgItem = (props) => {
           <p>发送方ip：{item['SenderIPAddress']}</p>
           <p>发送方mac：{item['SenderMACAddress']}</p>
           <p>消息：{item['Message']}</p>
-          <button onClick={() => props.deleteMsg(index)}>X</button>
+          {/* <button onClick={() => props.deleteMsg(index)}>X</button> */}
         </List.Item>
       )}
     />

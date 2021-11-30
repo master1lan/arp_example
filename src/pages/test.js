@@ -51,12 +51,16 @@ export default class Page extends React.Component {
         '71:51:00:C4:35:62': [],
       },
       /**
-       * 主机映射表，通过mac确定
+       * 所有映射表，通过mac确定
        */
       pcMacToIp: {
         '71:51:00:C4:35:62': {
           ipaddress: 'macAddress',
           '172.16.10.2': '71:51:00:C4:35:62',
+        },
+        'BB:05:72:C4:A7:45': {
+          ipaddress: 'macAddress',
+          '172.16.10.1': 'BB:05:72:C4:A7:45',
         },
       },
       /**
@@ -107,7 +111,10 @@ export default class Page extends React.Component {
           '172.16.' + item + '.1')
       ),
     );
-    // state.switch[mac][mac] = ipaddress;
+    state.pcMacToIp[mac] = {
+      ipaddress: 'macAddress',
+    };
+    state.pcMacToIp[mac][ipaddress] = mac;
     state.switchMac.push(mac);
     state.switchOwnMac[mac] = [];
     state.gataNum[ipaddress] = new Set([1]);
@@ -123,12 +130,13 @@ export default class Page extends React.Component {
       message.error('此ip不可用！');
       return;
     }
-    //不设置ip冲突查询
+
     const state = this.state;
     let ipaddress = '172.16.' + gataWay + '.' + num;
     let mac = newMAC(state.macAddress);
     state.macAddress.add(mac);
     let gataMac = state.ipToMac['172.16.' + gataWay + '.1'];
+    state.gataNum['172.16.' + gataWay + '.1'].add(num);
     state.switchOwnMac[gataMac].push(mac);
     state.msg[mac] = [];
     state.pcMacToIp[mac] = {
@@ -139,48 +147,94 @@ export default class Page extends React.Component {
     state.macToIp[mac] = ipaddress;
     this.setState(state);
   }
-
+  /**
+   * 交换机显示一次消息，刷新两次映射表；
+   */
   knownSendData(arpFormat) {
     const state = this.state;
-    //已知mac地址，先发到交换机
+    //先发到sender交换机
     let gataip = arpFormat['SenderIPAddress'].split('.');
     gataip[3] = '1';
     gataip = gataip.join('.');
-    //交换机消息加载
-    state.msg[state.ipToMac[gataip]].push(arpFormat);
-    //交换机刷新映射表，当然不能把自己的刷新了
-    if (arpFormat['SenderIPAddress'] != gataip) {
-      state.switch[state.ipToMac[gataip]][arpFormat['SenderMACAddress']] =
-        arpFormat['SenderIPAddress'];
-    }
-    if (arpFormat['TargetIPAddress'] != gataip) {
-      state.switch[state.ipToMac[gataip]][arpFormat['TargetMACAddress']] =
-        arpFormat['TargetIPAddress'];
-    }
-    //假如要通过不止一个交换机，在这里它最多通过两个交换机，那么我们就可以
     let anothergataip = arpFormat['TargetIPAddress'].split('.');
     anothergataip[3] = '1';
     anothergataip = anothergataip.join('.');
-    if (anothergataip != gataip) {
-      if (arpFormat['SenderIPAddress'] != anothergataip) {
-        state.switch[state.ipToMac[anothergataip]][
-          arpFormat['SenderMACAddress']
-        ] = arpFormat['SenderIPAddress'];
-      }
-      if (arpFormat['TargetIPAddress'] != anothergataip) {
+    //sender交换机消息加载
+    state.msg[state.ipToMac[gataip]].push(arpFormat);
+    //sender交换机刷新映射表，当然不能把自己的刷新了
+    if (arpFormat['SenderIPAddress'] != gataip) {
+      state.switch[state.ipToMac[gataip]][arpFormat['SenderMACAddress']] =
+        arpFormat['SenderIPAddress'];
+      state.pcMacToIp[state.ipToMac[gataip]][arpFormat['SenderIPAddress']] =
+        arpFormat['SenderMACAddress'];
+    }
+    //同网段刷新
+    if (arpFormat['TargetIPAddress'] != gataip && anothergataip == gataip) {
+      state.switch[state.ipToMac[gataip]][arpFormat['TargetMACAddress']] =
+        arpFormat['TargetIPAddress'];
+      state.pcMacToIp[state.ipToMac[gataip]][arpFormat['TargetIPAddress']] =
+        arpFormat['TargetMACAddress'];
+
+      state.pcMacToIp[arpFormat['TargetMACAddress']][
+        arpFormat['SenderIPAddress']
+      ] = arpFormat['SenderMACAddress'];
+      //然后对应的主机接收这个消息
+      state.msg[arpFormat['TargetMACAddress']].push(arpFormat);
+    }
+    //不同网段刷新，这里需要修改
+    if (
+      arpFormat['TargetIPAddress'] != anothergataip &&
+      anothergataip != gataip
+    ) {
+      //查询映射表
+      if (
+        state.pcMacToIp[state.ipToMac[anothergataip]][
+          arpFormat['TargetIPAddress']
+        ] != undefined
+      ) {
+        //存在直接发送
+        let everyip = ArpFormat(
+          state.pcMacToIp[state.ipToMac[anothergataip]][
+            arpFormat['TargetIPAddress']
+          ],
+          arpFormat['TargetIPAddress'],
+          arpFormat['SenderMACAddress'],
+          arpFormat['SenderIPAddress'],
+          arpFormat['Message'],
+        );
+        //b网关接收
+        state.msg[state.ipToMac[anothergataip]].push(everyip);
+        //对应ip接收
+        state.msg[everyip['TargetMACAddress']].push(everyip);
         state.switch[state.ipToMac[anothergataip]][
           arpFormat['TargetMACAddress']
         ] = arpFormat['TargetIPAddress'];
+        state.pcMacToIp[state.ipToMac[anothergataip]][
+          arpFormat['TargetIPAddress']
+        ] = arpFormat['TargetMACAddress'];
+      } else {
+        let everyipgata = ArpFormat(
+          'FF:FF:FF:FF:FF:FF',
+          arpFormat['TargetIPAddress'],
+          state.ipToMac[gataip],
+          arpFormat['SenderIPAddress'],
+          arpFormat['Message'],
+        );
+        //网关进行接收
+        state.msg[state.ipToMac[anothergataip]].push(everyipgata);
+        //不存在进行广播
+        let everyip = ArpFormat(
+          '00:00:00:00:00:00',
+          arpFormat['TargetIPAddress'],
+          state.ipToMac[anothergataip],
+          anothergataip,
+          '',
+        );
+        this.whereAreYou(anothergataip, everyip);
+        //然后发送该消息
+        state.msg[state.ipToMac[arpFormat['TargetIPAddress']]].push(arpFormat);
       }
-      state.msg[state.ipToMac[anothergataip]].push(arpFormat);
     }
-    //然后对应的主机接收这个消息
-    state.msg[arpFormat['TargetMACAddress']].push(arpFormat);
-    //然后对应主机刷新映射表
-    console.log(arpFormat);
-    state.pcMacToIp[arpFormat['TargetMACAddress']][
-      arpFormat['SenderIPAddress']
-    ] = arpFormat['SenderMACAddress'];
     this.setState(state);
   }
   /**
@@ -188,60 +242,46 @@ export default class Page extends React.Component {
    */
   whereAreYou(gataip, arpFormat) {
     const state = this.state;
-    //得到网关的物理表
-    if (gataip.split('.')[2] != arpFormat['SenderIPAddress'].split('.')[2]) {
-      // 当不在同一个网关下面时，交换机之间转发给相应网段的交换机就可以了
-      let anothergataip = arpFormat['SenderIPAddress'].split('.');
-      anothergataip[3] = '1';
-      anothergataip = anothergataip.join('.');
-      //现在a网关显示
-      state.msg[state.ipToMac[gataip]].push(arpFormat);
-      //再在b网关显示
-      state.msg[state.ipToMac[anothergataip]].push(arpFormat);
-      //最后在目标主机上显示
-      state.msg[state.ipToMac[arpFormat['TargetIPAddress']]].push(arpFormat);
-    } else {
-      let macarray = state.switchOwnMac[state.ipToMac[gataip]];
-      //同一个网关下面
-      for (let i = 0; i < macarray.length; i++) {
+    let macarray = state.switchOwnMac[state.ipToMac[gataip]];
+    //同一个网关下面
+    for (let i = 0; i < macarray.length; i++) {
+      if (macarray[i] != arpFormat['SenderMACAddress']) {
         let everyip = ArpFormat(
           arpFormat['TargetMACAddress'],
-          arpFormat['TargetIPAddress'],
+          state.macToIp[macarray[i]],
           arpFormat['SenderMACAddress'],
           arpFormat['SenderIPAddress'],
           arpFormat['Message'],
         );
-        if (macarray[i] != arpFormat['SenderMACAddress']) {
-          everyip['TargetIPAddress'] = state.macToIp[macarray[i]];
-          //先在交换机上面显示
-          state.msg[state.ipToMac[gataip]].push(everyip);
-          //然后在每一个主机上显示
-          state.msg[macarray[i]].push(everyip);
-          //如果是对应主机
-          if (state.macToIp[macarray[i]] == arpFormat['TargetIPAddress']) {
-            let reply = ArpFormat(
-              arpFormat['TargetMACAddress'],
-              arpFormat['TargetIPAddress'],
-              arpFormat['SenderMACAddress'],
-              arpFormat['SenderIPAddress'],
-              arpFormat['Message'],
-            );
-            //回应报文
-            reply['SenderIPAddress'] = arpFormat['TargetIPAddress'];
-            reply['SenderMACAddress'] = macarray[i];
-            reply['TargetIPAddress'] = arpFormat['SenderIPAddress'];
-            reply['TargetMACAddress'] = arpFormat['SenderMACAddress'];
-            //主机显示
-            state.msg[macarray[i]].push(reply);
-            this.knownSendData(reply);
-            state.msg[arpFormat['SenderMACAddress']].push(reply);
-            //还有刷新
-            state.pcMacToIp[macarray[i]][arpFormat['SenderIPAddress']] =
-              arpFormat['SenderMACAddress'];
-          }
+        //先在交换机上面显示
+        state.msg[state.ipToMac[gataip]].push(everyip);
+        //然后在每一个主机上显示
+        state.msg[macarray[i]].push(everyip);
+        //如果是对应主机
+        if (state.macToIp[macarray[i]] == arpFormat['TargetIPAddress']) {
+          let reply = ArpFormat(
+            arpFormat['TargetMACAddress'],
+            arpFormat['TargetIPAddress'],
+            arpFormat['SenderMACAddress'],
+            arpFormat['SenderIPAddress'],
+            arpFormat['Message'],
+          );
+          //回应报文
+          reply['SenderIPAddress'] = arpFormat['TargetIPAddress'];
+          reply['SenderMACAddress'] = macarray[i];
+          reply['TargetIPAddress'] = arpFormat['SenderIPAddress'];
+          reply['TargetMACAddress'] = arpFormat['SenderMACAddress'];
+          //主机显示
+          // state.msg[macarray[i]].push(reply);
+          this.knownSendData(reply);
+          // state.msg[arpFormat['SenderMACAddress']].push(reply);
+          //
+          state.pcMacToIp[macarray[i]][arpFormat['SenderIPAddress']] =
+            arpFormat['SenderMACAddress'];
         }
       }
     }
+
     this.setState(state);
   }
 
@@ -250,15 +290,23 @@ export default class Page extends React.Component {
    * @param {arpFormat} arpFormat
    */
   sendData(arpFormat) {
-    // console.log(arpFormat);
     let SenderMACAddress = arpFormat['SenderMACAddress'];
     let SenderIPAddress = arpFormat['SenderIPAddress'];
     let TargetIPAddress = arpFormat['TargetIPAddress'];
     let TargetMACAddress =
       this.state.pcMacToIp[SenderMACAddress][TargetIPAddress];
-    //如果主机映射表内存在对应ip地址的mac地址
-    if (TargetMACAddress != undefined) {
-      arpFormat['TargetMACAddress'] = TargetMACAddress;
+    let gataipSender = arpFormat['SenderIPAddress'].split('.');
+    gataipSender[3] = '1';
+    gataipSender = gataipSender.join('.');
+    let gataipTarget = arpFormat['TargetIPAddress'].split('.');
+    gataipTarget[3] = '1';
+    gataipTarget = gataipTarget.join('.');
+    //如果主机映射表内存在对应ip地址的mac地址或者不在同一个网关
+    if (TargetMACAddress != undefined || gataipSender != gataipTarget) {
+      arpFormat['TargetMACAddress'] =
+        TargetMACAddress == undefined
+          ? this.state.ipToMac[gataipSender]
+          : TargetMACAddress;
       this.knownSendData(arpFormat);
       return;
     }
@@ -269,10 +317,11 @@ export default class Page extends React.Component {
     gataip = gataip.join('.');
     this.whereAreYou(gataip, arpFormat);
   }
+
   render() {
     const state = this.state;
     return (
-      <>
+      <div style={{ fontSize: '20px !important' }}>
         {state.switchMac.map((item, index) => (
           <Layout key={index}>
             <Segment
@@ -295,7 +344,7 @@ export default class Page extends React.Component {
           </Layout>
         ))}
         <AddSwitch newSwitch={this.newSwitch} />
-      </>
+      </div>
     );
   }
 }
