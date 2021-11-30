@@ -36072,13 +36072,19 @@
             r = $d(t.macAddress);
           t.macAddress.add(r),
             (t.switch[r] = { macAddress: 'ipaddress' }),
-            (t.switch[r][r] = n),
+            (t.ipToMac[n] = r),
+            (t.macToIp[r] = n),
+            t.gataWay.forEach(
+              (e) => (
+                (t.switch[t.ipToMac['172.16.' + e + '.1']][r] = n),
+                (t.switch[r][t.ipToMac['172.16.' + e + '.1']] =
+                  '172.16.' + e + '.1')
+              ),
+            ),
             t.switchMac.push(r),
             (t.switchOwnMac[r] = []),
             (t.gataNum[n] = new Set([1])),
             (t.msg[r] = []),
-            (t.ipToMac[n] = r),
-            (t.macToIp[r] = n),
             this.setState(t);
         }
       }
@@ -36130,43 +36136,48 @@
           this.setState(t);
       }
       whereAreYou(e, t) {
-        var n = this.state,
-          r = n.switchOwnMac[n.ipToMac[e]];
-        if (e.split('.')[2] != t['SenderIPAddress'].split('.')[2]);
-        else
-          for (var o = 0; o < r.length; o++)
-            if (r[o] != t['SenderMACAddress']) {
-              var a = Yd(
+        var n = this.state;
+        if (e.split('.')[2] != t['SenderIPAddress'].split('.')[2]) {
+          var r = t['SenderIPAddress'].split('.');
+          (r[3] = '1'),
+            (r = r.join('.')),
+            n.msg[n.ipToMac[e]].push(t),
+            n.msg[n.ipToMac[r]].push(t),
+            n.msg[n.ipToMac[t['TargetIPAddress']]].push(t);
+        } else
+          for (var o = n.switchOwnMac[n.ipToMac[e]], a = 0; a < o.length; a++) {
+            var i = Yd(
+              t['TargetMACAddress'],
+              t['TargetIPAddress'],
+              t['SenderMACAddress'],
+              t['SenderIPAddress'],
+              t['Message'],
+            );
+            if (
+              o[a] != t['SenderMACAddress'] &&
+              ((i['TargetIPAddress'] = n.macToIp[o[a]]),
+              n.msg[n.ipToMac[e]].push(i),
+              n.msg[o[a]].push(i),
+              n.macToIp[o[a]] == t['TargetIPAddress'])
+            ) {
+              var c = Yd(
                 t['TargetMACAddress'],
                 t['TargetIPAddress'],
                 t['SenderMACAddress'],
                 t['SenderIPAddress'],
                 t['Message'],
               );
-              if (
-                ((a['TargetIPAddress'] = n.macToIp[r[o]]),
-                n.msg[n.ipToMac[e]].push(a),
-                n.msg[r[o]].push(a),
-                n.macToIp[r[o]] == t['TargetIPAddress'])
-              ) {
-                var i = Yd(
-                  t['TargetMACAddress'],
-                  t['TargetIPAddress'],
-                  t['SenderMACAddress'],
-                  t['SenderIPAddress'],
-                  t['Message'],
-                );
-                (i['SenderIPAddress'] = t['TargetIPAddress']),
-                  (i['SenderMACAddress'] = r[o]),
-                  (i['TargetIPAddress'] = t['SenderIPAddress']),
-                  (i['TargetMACAddress'] = t['SenderMACAddress']),
-                  n.msg[r[o]].push(i),
-                  this.knownSendData(i),
-                  n.msg[t['SenderMACAddress']].push(i),
-                  (n.pcMacToIp[r[o]][t['SenderIPAddress']] =
-                    t['SenderMACAddress']);
-              }
+              (c['SenderIPAddress'] = t['TargetIPAddress']),
+                (c['SenderMACAddress'] = o[a]),
+                (c['TargetIPAddress'] = t['SenderIPAddress']),
+                (c['TargetMACAddress'] = t['SenderMACAddress']),
+                n.msg[o[a]].push(c),
+                this.knownSendData(c),
+                n.msg[t['SenderMACAddress']].push(c),
+                (n.pcMacToIp[o[a]][t['SenderIPAddress']] =
+                  t['SenderMACAddress']);
             }
+          }
         this.setState(n);
       }
       sendData(e) {

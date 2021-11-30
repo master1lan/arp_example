@@ -92,16 +92,26 @@ export default class Page extends React.Component {
     let ipaddress = '172.16.' + num + '.1';
     let mac = newMAC(state.macAddress);
     state.macAddress.add(mac);
+    //新添加的交换机应该知道其他交换机的地址
     state.switch[mac] = {
       macAddress: 'ipaddress',
     };
-    state.switch[mac][mac] = ipaddress;
+    state.ipToMac[ipaddress] = mac;
+    state.macToIp[mac] = ipaddress;
+    state.gataWay.forEach(
+      (item) => (
+        //每台交换机新加一个地址
+        (state.switch[state.ipToMac['172.16.' + item + '.1']][mac] = ipaddress),
+        //新加交换机添加每台交换机的地址
+        (state.switch[mac][state.ipToMac['172.16.' + item + '.1']] =
+          '172.16.' + item + '.1')
+      ),
+    );
+    // state.switch[mac][mac] = ipaddress;
     state.switchMac.push(mac);
     state.switchOwnMac[mac] = [];
     state.gataNum[ipaddress] = new Set([1]);
     state.msg[mac] = [];
-    state.ipToMac[ipaddress] = mac;
-    state.macToIp[mac] = ipaddress;
     this.setState(state);
   }
   newPC(num, gataWay) {
@@ -179,20 +189,29 @@ export default class Page extends React.Component {
   whereAreYou(gataip, arpFormat) {
     const state = this.state;
     //得到网关的物理表
-    let macarray = state.switchOwnMac[state.ipToMac[gataip]];
     if (gataip.split('.')[2] != arpFormat['SenderIPAddress'].split('.')[2]) {
-      // console.log("不在同一个网段！");
+      // 当不在同一个网关下面时，交换机之间转发给相应网段的交换机就可以了
+      let anothergataip = arpFormat['SenderIPAddress'].split('.');
+      anothergataip[3] = '1';
+      anothergataip = anothergataip.join('.');
+      //现在a网关显示
+      state.msg[state.ipToMac[gataip]].push(arpFormat);
+      //再在b网关显示
+      state.msg[state.ipToMac[anothergataip]].push(arpFormat);
+      //最后在目标主机上显示
+      state.msg[state.ipToMac[arpFormat['TargetIPAddress']]].push(arpFormat);
     } else {
+      let macarray = state.switchOwnMac[state.ipToMac[gataip]];
       //同一个网关下面
       for (let i = 0; i < macarray.length; i++) {
+        let everyip = ArpFormat(
+          arpFormat['TargetMACAddress'],
+          arpFormat['TargetIPAddress'],
+          arpFormat['SenderMACAddress'],
+          arpFormat['SenderIPAddress'],
+          arpFormat['Message'],
+        );
         if (macarray[i] != arpFormat['SenderMACAddress']) {
-          let everyip = ArpFormat(
-            arpFormat['TargetMACAddress'],
-            arpFormat['TargetIPAddress'],
-            arpFormat['SenderMACAddress'],
-            arpFormat['SenderIPAddress'],
-            arpFormat['Message'],
-          );
           everyip['TargetIPAddress'] = state.macToIp[macarray[i]];
           //先在交换机上面显示
           state.msg[state.ipToMac[gataip]].push(everyip);
