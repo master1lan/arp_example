@@ -1,6 +1,7 @@
 import { defineConfig } from 'umi';
 
 export default defineConfig({
+  dynamicImport: {},
   history: {
     type: 'hash',
   },
@@ -10,9 +11,6 @@ export default defineConfig({
   nodeModulesTransform: {
     type: 'none',
   },
-  routes: [
-    // { path: '/', component: '@/pages/index' },
-    { path: '/', component: '@/pages/test' },
-  ],
+  routes: [{ path: '/', component: '@/pages/index' }],
   fastRefresh: {},
 });
